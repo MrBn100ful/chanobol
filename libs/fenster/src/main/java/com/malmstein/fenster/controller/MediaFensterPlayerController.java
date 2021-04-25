@@ -28,10 +28,8 @@ import java.util.Locale;
 
 /**
  * Controller to manage syncing the ui models with the UI Controls and MediaPlayer.
- * <p/>
  * Note that the ui models have a narrow scope (i.e. chapter list, piece navigation),
  * their interaction is orchestrated by this controller.ø
- * <p/>
  * It's actually a view currently, as is the android MediaController.
  * (which is a bit odd and should be subject to change.)
  */
@@ -40,7 +38,6 @@ public final class MediaFensterPlayerController extends RelativeLayout implement
     /**
      * Called to notify that the control have been made visible or hidden.
      * Implementation might want to show/hide actionbar or do other ui adjustments.
-     * <p/>
      * Implementation must be provided via the corresponding setter.
      */
 
@@ -170,7 +167,7 @@ public final class MediaFensterPlayerController extends RelativeLayout implement
 
     @Override
     protected void onFinishInflate() {
-        LayoutInflater.from(getContext()).inflate(R.layout.view_media_controller, this);
+        LayoutInflater.from(getContext()).inflate(R.layout.fen__view_media_controller, this);
         initControllerView();
     }
 
@@ -190,25 +187,25 @@ public final class MediaFensterPlayerController extends RelativeLayout implement
         gestureControllerView = (FensterGestureControllerView) findViewById(R.id.media_controller_gestures_area);
         gestureControllerView.setFensterEventsListener(this);
 
-        mPauseButton = (ImageButton) findViewById(R.id.media_controller_pause);
+        mPauseButton = (ImageButton) findViewById(R.id.fen__media_controller_pause);
         mPauseButton.requestFocus();
         mPauseButton.setOnClickListener(mPauseListener);
 
-        mNextButton = (ImageButton) findViewById(R.id.media_controller_next);
-        mPrevButton = (ImageButton) findViewById(R.id.media_controller_previous);
+        mNextButton = (ImageButton) findViewById(R.id.fen__media_controller_next);
+        mPrevButton = (ImageButton) findViewById(R.id.fen__media_controller_previous);
 
-        mProgress = (SeekBar) findViewById(R.id.media_controller_progress);
+        mProgress = (SeekBar) findViewById(R.id.fen__media_controller_progress);
         mProgress.setOnSeekBarChangeListener(mSeekListener);
         mProgress.setMax(MAX_VIDEO_PROGRESS);
 
-        mVolume = (VolumeSeekBar) findViewById(R.id.media_controller_volume);
+        mVolume = (VolumeSeekBar) findViewById(R.id.fen__media_controller_volume);
         mVolume.initialise(this);
 
-        mBrightness = (BrightnessSeekBar) findViewById(R.id.media_controller_brightness);
+        mBrightness = (BrightnessSeekBar) findViewById(R.id.fen__media_controller_brightness);
         mBrightness.initialise(this);
 
-        mEndTime = (TextView) findViewById(R.id.media_controller_time);
-        mCurrentTime = (TextView) findViewById(R.id.media_controller_time_current);
+        mEndTime = (TextView) findViewById(R.id.fen__media_controller_time);
+        mCurrentTime = (TextView) findViewById(R.id.fen__media_controller_time_current);
         mFormatBuilder = new StringBuilder();
         mFormatter = new Formatter(mFormatBuilder, Locale.getDefault());
     }

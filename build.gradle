@@ -1,6 +1,7 @@
 buildscript {
     repositories {
         jcenter()
+        mavenCentral()
         maven { url 'https://maven.fabric.io/public' }
         maven {
             url 'https://maven.google.com/'
@@ -8,15 +9,14 @@ buildscript {
         }
     }
     dependencies {
-       // classpath 'com.android.tools.build:gradle:1.2.3'
         classpath 'com.android.tools.build:gradle:2.3.2'
         classpath 'io.fabric.tools:gradle:1.+'
     }
 }
 
-def versionMajor = 1
-def versionMinor = 4
-def versionPatch = 7
+def versionMajor = 2
+def versionMinor = 0
+def versionPatch = 0
 def versionBuild = 0
 
 apply plugin: 'com.android.application'
@@ -55,39 +55,36 @@ dependencies {
 
     compile  'com.koushikdutta.ion:ion:2.1.3'
 
-    // TODO: Update to 1.2.4 once it's out (https://github.com/chrisbanes/PhotoView/issues/72)
     compile  'com.github.chrisbanes.photoview:library:1.2.2'
 
     compile project(':libs:fenster')
 
-    compile ('com.crashlytics.sdk.android:crashlytics:2.2.0@aar') {
-        transitive = true;
-    }
+    compile ('com.crashlytics.sdk.android:crashlytics:2.2.0')
+
+
 }
 
 android {
-    compileSdkVersion 22
+    compileSdkVersion 26
     buildToolsVersion '25.0.0'
 
     defaultConfig {
-        applicationId "anabolicandroids.chanobol"
-        minSdkVersion 15
-        targetSdkVersion 22
+        applicationId "mrbn100ful.chanobol"
+        minSdkVersion 20
+        targetSdkVersion 26
 
         renderscriptTargetApi 19
         renderscriptSupportModeEnabled true
 
         versionCode versionMajor * 100000 + versionMinor * 10000 + versionPatch * 100 + versionBuild
         versionName "${versionMajor}.${versionMinor}.${versionPatch}"
-    }
 
-    /*
-    If you want to sign releases, make a file keys.properties with the following content:
-    keystoreFile=yourkey.store
-    keystorePass=pass
-    keyAlias=alias
-    keyPass=pass
-    */
+        javaCompileOptions {
+            annotationProcessorOptions {
+                includeCompileClasspath = false
+            }
+        }
+    }
 
     File f = file('keys.properties')
     boolean doSign = f.exists();
@@ -112,21 +109,16 @@ android {
             applicationIdSuffix '.dev'
             versionNameSuffix '-dev'
         }
-        //noinspection GroovyMissingReturnStatement
         release {
+
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
             if (doSign) {
                 signingConfig signingConfigs.release
             }
         }
-        release_sfw {
-            initWith buildTypes.release
-            applicationIdSuffix '.reallysfw'
-        }
     }
     lintOptions {
         disable 'InvalidPackage'
     }
 }
-

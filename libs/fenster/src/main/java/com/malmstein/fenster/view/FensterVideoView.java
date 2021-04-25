@@ -4,6 +4,9 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.res.AssetFileDescriptor;
+import android.content.res.TypedArray;
+import android.graphics.Matrix;
 import android.graphics.SurfaceTexture;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
@@ -11,64 +14,64 @@ import android.media.MediaPlayer.OnCompletionListener;
 import android.media.MediaPlayer.OnErrorListener;
 import android.media.MediaPlayer.OnInfoListener;
 import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.TextureView;
+import android.view.View;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.MediaController;
 
 import com.malmstein.fenster.R;
-import com.malmstein.fenster.play.FensterPlayer;
 import com.malmstein.fenster.controller.FensterPlayerController;
+import com.malmstein.fenster.play.FensterPlayer;
 import com.malmstein.fenster.play.FensterVideoStateListener;
 
 import java.io.IOException;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Displays a video file.  The VideoView class
  * can load images from various sources (such as resources or content
  * providers), takes care of computing its measurement from the video so that
  * it can be used in any layout manager, and provides various display options
- * such as scaling and tinting.<p>
- * <p/>
+ * such as scaling and tinting.
  * <em>Note: VideoView does not retain its full state when going into the
  * background.</em>  In particular, it does not restore the current play state,
  * play position, selected tracks added via
  * {@link android.app.Activity#onSaveInstanceState} and
- * {@link android.app.Activity#onRestoreInstanceState}.<p>
+ * {@link android.app.Activity#onRestoreInstanceState}.
  * Also note that the audio session id (from {@link #getAudioSessionId}) may
  * change from its previously returned value when the VideoView is restored.
  */
 
 public class FensterVideoView extends TextureView implements MediaController.MediaPlayerControl, FensterPlayer {
 
+    public interface Renderer {
+        void onPause();
+
+        boolean isStarted();
+
+        void setVideoSize(int width, int height);
+
+        void setOutputSize(int width, int height);
+
+        void startRenderingToOutput(SurfaceTexture outputSurfaceTexture, Runnable callback);
+
+        SurfaceTexture getInputTexture();
+    }
+
     public static final String TAG = "TextureVideoView";
     public static final int VIDEO_BEGINNING = 0;
 
-    /**
-     * Notifies periodically about replay.
-     */
-    public interface ReplayListener {
-        /**
-         * Called periodically to notify that we are still playing.
-         * <p/>
-         * Used to check whether we are still permitted to watch.
-         */
-        void onStillPlaying();
+    public enum ScaleType {
+        SCALE_TO_FIT, CROP
     }
-
-    private static final ReplayListener NULL_REPLAY_LISTENER = new ReplayListener() {
-        @Override
-        public void onStillPlaying() {
-            // no op
-        }
-    };
 
     // all possible internal states
     private static final int STATE_ERROR = -1;
@@ -79,7 +82,6 @@ public class FensterVideoView extends TextureView implements MediaController.Med
     private static final int STATE_PAUSED = 4;
     private static final int STATE_PLAYBACK_COMPLETED = 5;
     private static final int MILLIS_IN_SEC = 1000;
-    private static final long NOTIFY_REPLAY_INTERVAL_MILLIS = TimeUnit.MINUTES.toMillis(10);
 
     // collaborators / delegates / composites .. discuss
     private final VideoSizeCalculator videoSizeCalculator;
@@ -89,23 +91,24 @@ public class FensterVideoView extends TextureView implements MediaController.Med
     // calling pause() intends to bring the object to a target state
     // of STATE_PAUSED.
     private int mCurrentState = STATE_IDLE;
-
     private int mTargetState = STATE_IDLE;
-    // settable by the client
+
+    private ScaleType mScaleType;
+
     private Uri mUri;
 
+    private AssetFileDescriptor mAssetFileDescriptor;
     private Map<String, String> mHeaders;
-    // All the stuff we need for playing and showing a video
     private SurfaceTexture mSurfaceTexture;
     private MediaPlayer mMediaPlayer = null;
-    private int mAudioSession;
     private FensterPlayerController fensterPlayerController;
     private OnCompletionListener mOnCompletionListener;
     private MediaPlayer.OnPreparedListener mOnPreparedListener;
-    private int mCurrentBufferPercentage;
     private OnErrorListener mOnErrorListener;
     private OnInfoListener mOnInfoListener;
+    private int mAudioSession;
     private int mSeekWhenPrepared;  // recording the seek position while preparing
+    private int mCurrentBufferPercentage;
     private boolean mCanPause;
     private boolean mCanSeekBack;
     private boolean mCanSeekForward;
@@ -113,20 +116,50 @@ public class FensterVideoView extends TextureView implements MediaController.Med
 
     private AlertDialog errorDialog;
 
+    private Renderer mRenderer;
+    private int mSurfaceWidth;
+    private int mSurfaceHeight;
+
+    private boolean mLooping;
+
     public FensterVideoView(final Context context, final AttributeSet attrs) {
         this(context, attrs, 0);
     }
 
     public FensterVideoView(final Context context, final AttributeSet attrs, final int defStyle) {
         super(context, attrs, defStyle);
+        applyCustomAttributes(context, attrs);
         videoSizeCalculator = new VideoSizeCalculator();
         initVideoView();
     }
 
+    private void applyCustomAttributes(Context context, AttributeSet attrs) {
+        TypedArray typedArray = context.obtainStyledAttributes(attrs, R.styleable.FensterVideoView);
+        if (typedArray == null) {
+            return;
+        }
+        int[] attrsValues = {R.attr.scaleType};
+        TypedArray scaleTypedArray = context.obtainStyledAttributes(attrs, attrsValues);
+        if (scaleTypedArray != null) {
+            try {
+                int scaleTypeId = typedArray.getInt(0, 0);
+                mScaleType = ScaleType.values()[scaleTypeId];
+            } finally {
+                typedArray.recycle();
+            }
+        } else {
+            mScaleType = ScaleType.SCALE_TO_FIT;
+        }
+    }
+
     @Override
     protected void onMeasure(final int widthMeasureSpec, final int heightMeasureSpec) {
-        VideoSizeCalculator.Dimens dimens = videoSizeCalculator.measure(widthMeasureSpec, heightMeasureSpec);
-        setMeasuredDimension(dimens.getWidth(), dimens.getHeight());
+        if (mScaleType == ScaleType.CROP) {
+            setMeasuredDimension(View.MeasureSpec.getSize(widthMeasureSpec), View.MeasureSpec.getSize(heightMeasureSpec));
+        } else {
+            VideoSizeCalculator.Dimens dimens = videoSizeCalculator.measure(widthMeasureSpec, heightMeasureSpec);
+            setMeasuredDimension(dimens.getWidth(), dimens.getHeight());
+        }
     }
 
     @Override
@@ -158,16 +191,49 @@ public class FensterVideoView extends TextureView implements MediaController.Med
         setOnInfoListener(onInfoToPlayStateListener);
     }
 
-    public void setVideoFromBeginning(final String path) {
+    private void disableFileDescriptor() {
+        mAssetFileDescriptor = null;
+    }
+
+    public void setVideo(final String path) {
+        disableFileDescriptor();
         setVideo(Uri.parse(path), VIDEO_BEGINNING);
     }
 
     public void setVideo(final String url, final int seekInSeconds) {
-        setVideoURI(Uri.parse(url), null, seekInSeconds);
+        disableFileDescriptor();
+        setVideo(Uri.parse(url), seekInSeconds);
     }
 
     public void setVideo(final Uri uri, final int seekInSeconds) {
+        disableFileDescriptor();
         setVideoURI(uri, null, seekInSeconds);
+    }
+
+    public void setVideo(final AssetFileDescriptor assetFileDescriptor) {
+        mAssetFileDescriptor = assetFileDescriptor;
+        setVideoURI(null, null, VIDEO_BEGINNING);
+    }
+
+    public void setVideo(final AssetFileDescriptor assetFileDescriptor, final int seekInSeconds) {
+        mAssetFileDescriptor = assetFileDescriptor;
+        setVideoURI(null, null, seekInSeconds);
+    }
+
+    /**
+     * Set the scale type of the video, needs to be set after setVideo() has been called
+     *
+     * @param scaleType
+     */
+    private void setScaleType(ScaleType scaleType) {
+//        switch (scaleType) {
+//            case SCALE_TO_FIT:
+//                mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT);
+//                break;
+//            case CROP:
+//                mMediaPlayer.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING);
+//                break;
+//        }
     }
 
     private void setVideoURI(final Uri uri, final Map<String, String> headers, final int seekInSeconds) {
@@ -178,10 +244,6 @@ public class FensterVideoView extends TextureView implements MediaController.Med
         openVideo();
         requestLayout();
         invalidate();
-    }
-
-    public String getCurrentStream() {
-        return mUri.toString();
     }
 
     public void stopPlayback() {
@@ -195,14 +257,7 @@ public class FensterVideoView extends TextureView implements MediaController.Med
         }
     }
 
-    private void openVideo() {
-        if (notReadyForPlaybackJustYetWillTryAgainLater()) {
-            return;
-        }
-        tellTheMusicPlaybackServiceToPause();
-
-        // we shouldn't clear the target state, because somebody might have called start() previously
-        release(false);
+    private void openVideoImpl() {
         try {
             mMediaPlayer = new MediaPlayer();
 
@@ -218,24 +273,67 @@ public class FensterVideoView extends TextureView implements MediaController.Med
             mMediaPlayer.setOnInfoListener(mInfoListener);
             mMediaPlayer.setOnBufferingUpdateListener(mBufferingUpdateListener);
             mCurrentBufferPercentage = 0;
-            mMediaPlayer.setDataSource(getContext(), mUri, mHeaders);
-            mMediaPlayer.setSurface(new Surface(mSurfaceTexture));
+
+            setDataSource();
+            setScaleType(mScaleType);
+
+            mMediaPlayer.setSurface(new Surface(mRenderer == null ? mSurfaceTexture : mRenderer.getInputTexture()));
             mMediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
             mMediaPlayer.setScreenOnWhilePlaying(true);
             mMediaPlayer.prepareAsync();
+            mMediaPlayer.setLooping(mLooping);
 
             // we don't set the target state here either, but preserve the target state that was there before.
             mCurrentState = STATE_PREPARING;
             attachMediaController();
-        } catch (final IOException ex) {
-            notifyUnableToOpenContent(ex);
-        } catch (final IllegalArgumentException ex) {
+        } catch (final IOException | IllegalArgumentException ex) {
             notifyUnableToOpenContent(ex);
         }
     }
 
+    private void openVideo() {
+        if (mUri == null) {
+            return;
+        }
+        if (notReadyForPlaybackJustYetWillTryAgainLater()) {
+            return;
+        }
+        tellTheMusicPlaybackServiceToPause();
+
+        // we shouldn't clear the target state, because somebody might have called start() previously
+        release(false);
+        if (mRenderer != null) {
+            mRenderer.setOutputSize(mSurfaceWidth, mSurfaceHeight);
+            mRenderer.startRenderingToOutput(mSurfaceTexture, new Runnable() {
+                @Override
+                public void run() {
+                    new Handler(Looper.getMainLooper()).post(new Runnable() {
+                        @Override
+                        public void run() {
+                            openVideoImpl();
+                        }
+                    });
+                }
+            });
+        } else {
+            openVideoImpl();
+        }
+    }
+
+    private void setDataSource() throws IOException {
+        if (mAssetFileDescriptor != null) {
+            mMediaPlayer.setDataSource(
+                    mAssetFileDescriptor.getFileDescriptor(),
+                    mAssetFileDescriptor.getStartOffset(),
+                    mAssetFileDescriptor.getLength()
+            );
+        } else {
+            mMediaPlayer.setDataSource(getContext(), mUri, mHeaders);
+        }
+    }
+
     private boolean notReadyForPlaybackJustYetWillTryAgainLater() {
-        return mUri == null || mSurfaceTexture == null;
+        return mSurfaceTexture == null;
     }
 
     private void tellTheMusicPlaybackServiceToPause() {
@@ -246,7 +344,7 @@ public class FensterVideoView extends TextureView implements MediaController.Med
     }
 
     private void notifyUnableToOpenContent(final Exception ex) {
-        Log.w("Unable to open content: " + mUri, ex);
+        Log.w("Unable to open content:" + mUri, ex);
         mCurrentState = STATE_ERROR;
         mTargetState = STATE_ERROR;
         mErrorListener.onError(mMediaPlayer, MediaPlayer.MEDIA_ERROR_UNKNOWN, 0);
@@ -271,6 +369,9 @@ public class FensterVideoView extends TextureView implements MediaController.Med
         @Override
         public void onVideoSizeChanged(final MediaPlayer mp, final int width, final int height) {
             videoSizeCalculator.setVideoSize(mp.getVideoWidth(), mp.getVideoHeight());
+            if (mRenderer != null) {
+                mRenderer.setVideoSize(width, height);
+            }
             if (videoSizeCalculator.hasASizeYet()) {
                 requestLayout();
             }
@@ -293,6 +394,10 @@ public class FensterVideoView extends TextureView implements MediaController.Med
                 fensterPlayerController.setEnabled(true);
             }
             videoSizeCalculator.setVideoSize(mp.getVideoWidth(), mp.getVideoHeight());
+            fitScaling();
+            if (mRenderer != null) {
+                mRenderer.setVideoSize(mp.getVideoWidth(), mp.getVideoHeight());
+            }
 
             int seekToPosition = mSeekWhenPrepared;  // mSeekWhenPrepared may be changed after seekTo() call
             if (seekToPosition != 0) {
@@ -307,6 +412,39 @@ public class FensterVideoView extends TextureView implements MediaController.Med
             }
         }
     };
+
+    public void fitScaling() {
+        switch (mScaleType) {
+            case SCALE_TO_FIT:
+                setTransform(new Matrix());
+                break;
+            case CROP: {
+                float videoWidth = videoSizeCalculator.getVideoWidth();
+                float videoHeight = videoSizeCalculator.getVideoHeight();
+                float surfaceWidth = getMeasuredWidth();
+                float surfaceHeight = getMeasuredHeight();
+
+                float videoAR = videoWidth / videoHeight;
+                float surfaceAR = surfaceWidth / surfaceHeight;
+                if (videoAR > surfaceAR) {
+                    Matrix matrix = new Matrix();
+                    float ratio = surfaceHeight / videoHeight;
+                    float scale = videoWidth * ratio / surfaceWidth;
+                    matrix.setScale(scale, 1f, surfaceWidth / 2, surfaceHeight / 2);
+                    setTransform(matrix);
+                } else if (videoAR < surfaceAR) {
+                    Matrix matrix = new Matrix();
+                    float ratio = surfaceWidth / videoWidth;
+                    float scale = videoHeight * ratio / surfaceHeight;
+                    matrix.setScale(1f, scale, surfaceWidth / 2, surfaceHeight / 2);
+                    setTransform(matrix);
+                } else {
+                    setTransform(new Matrix());
+                }
+                break;
+            }
+        }
+    }
 
     private boolean pausedAt(final int seekToPosition) {
         return !isPlaying() && (seekToPosition != 0 || getCurrentPosition() > 0);
@@ -390,7 +528,7 @@ public class FensterVideoView extends TextureView implements MediaController.Med
 
     private boolean allowErrorListenerToHandle(final int frameworkError, final int implError) {
         if (mOnErrorListener != null) {
-            mOnErrorListener.onError(mMediaPlayer, frameworkError, implError);
+            return mOnErrorListener.onError(mMediaPlayer, frameworkError, implError);
         }
 
         return false;
@@ -402,15 +540,15 @@ public class FensterVideoView extends TextureView implements MediaController.Med
                 Log.d(TAG, "Dismissing last error dialog for a new one");
                 errorDialog.dismiss();
             }
-            errorDialog = createErrorDialog(this.getContext(), mOnCompletionListener, mMediaPlayer, getErrorMessage(frameworkError));
-            errorDialog.show();
+            getErrorMessage(frameworkError);
         }
     }
 
     private static AlertDialog createErrorDialog(final Context context, final OnCompletionListener completionListener, final MediaPlayer mediaPlayer, final int errorMessage) {
         return new AlertDialog.Builder(context)
                 .setMessage(errorMessage)
-                .setPositiveButton(android.R.string.ok,
+                .setPositiveButton(
+                        android.R.string.ok,
                         new DialogInterface.OnClickListener() {
                             public void onClick(final DialogInterface dialog, final int whichButton) {
                                     /* If we get here, there is no onError listener, so
@@ -427,7 +565,7 @@ public class FensterVideoView extends TextureView implements MediaController.Med
     }
 
     private static int getErrorMessage(final int frameworkError) {
-        int messageId = R.string.play_error_message;
+        int messageId = R.string.fen__play_error_message;
 
         if (frameworkError == MediaPlayer.MEDIA_ERROR_IO) {
             Log.e(TAG, "TextureVideoView error. File or network related operation errors.");
@@ -443,7 +581,7 @@ public class FensterVideoView extends TextureView implements MediaController.Med
             Log.e(TAG, "TextureVideoView error. Bitstream is conforming to the related coding standard or file spec, but the media framework does not support the feature.");
         } else if (frameworkError == MediaPlayer.MEDIA_ERROR_NOT_VALID_FOR_PROGRESSIVE_PLAYBACK) {
             Log.e(TAG, "TextureVideoView error. The video is streamed and its container is not valid for progressive playback i.e the video's index (e.g moov atom) is not at the start of the file.");
-            messageId = R.string.play_progressive_error_message;
+            messageId = R.string.fen__play_progressive_error_message;
         }
         return messageId;
     }
@@ -501,6 +639,8 @@ public class FensterVideoView extends TextureView implements MediaController.Med
         @Override
         public void onSurfaceTextureAvailable(final SurfaceTexture surface, final int width, final int height) {
             mSurfaceTexture = surface;
+            mSurfaceWidth = width;
+            mSurfaceHeight = height;
             openVideo();
         }
 
@@ -508,6 +648,11 @@ public class FensterVideoView extends TextureView implements MediaController.Med
         public void onSurfaceTextureSizeChanged(final SurfaceTexture surface, final int width, final int height) {
             boolean isValidState = (mTargetState == STATE_PLAYING);
             boolean hasValidSize = videoSizeCalculator.currentSizeIs(width, height);
+            if (mRenderer != null) {
+                mRenderer.setOutputSize(width, height);
+            }
+            mSurfaceWidth = width;
+            mSurfaceHeight = height;
             if (mMediaPlayer != null && isValidState && hasValidSize) {
                 if (mSeekWhenPrepared != 0) {
                     seekTo(mSeekWhenPrepared);
@@ -519,6 +664,7 @@ public class FensterVideoView extends TextureView implements MediaController.Med
         @Override
         public boolean onSurfaceTextureDestroyed(final SurfaceTexture surface) {
             mSurfaceTexture = null;
+
             hideMediaController();
             release(true);
             return false;
@@ -526,7 +672,9 @@ public class FensterVideoView extends TextureView implements MediaController.Med
 
         @Override
         public void onSurfaceTextureUpdated(final SurfaceTexture surface) {
-            mSurfaceTexture = surface;
+            if (mSurfaceTexture != surface) {
+                mSurfaceTexture = surface;
+            }
         }
     };
 
@@ -541,6 +689,12 @@ public class FensterVideoView extends TextureView implements MediaController.Med
             mCurrentState = STATE_IDLE;
             if (clearTargetState) {
                 mTargetState = STATE_IDLE;
+            }
+        }
+        if (mRenderer != null) {
+            if (mRenderer.isStarted()) {
+                mRenderer.onPause();
+                mRenderer = null;
             }
         }
     }
@@ -746,5 +900,11 @@ public class FensterVideoView extends TextureView implements MediaController.Med
         this.onPlayStateListener = onPlayStateListener;
     }
 
+    public Renderer getRenderer() {
+        return mRenderer;
+    }
 
+    public void setRenderer(Renderer renderer) {
+        this.mRenderer = renderer;
+    }
 }

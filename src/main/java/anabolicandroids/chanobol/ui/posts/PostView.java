@@ -70,8 +70,6 @@ public class PostView extends CardView {
     @InjectView(R.id.footerImage) TextView footerImage;
     @InjectView(R.id.date) TextView date;
     @InjectView(R.id.replies) TextView replies;
-    @InjectView(R.id.reply) TextView reply;
-    @InjectView(R.id.more) TextView more;
 
     private PostViewMovementMethod postViewMovementMethod = new PostViewMovementMethod();
     private static final int W = 0, H = 1;
@@ -130,9 +128,6 @@ public class PostView extends CardView {
         footerFlag.setImageBitmap(null);
         footerCountryName.setVisibility(GONE);
         footerImage.setVisibility(GONE);
-
-        more.setOnClickListener(moreListener);
-        reply.setOnClickListener(dummy);
     }
 
     OnClickListener dummy = new OnClickListener() {

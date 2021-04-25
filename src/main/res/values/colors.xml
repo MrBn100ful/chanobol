@@ -3,12 +3,12 @@
     <color name="transparent">#00000000</color>
     <color name="releaseIndicator">#20f0b3fa</color>
 
-    <color name="bgDark">#212121</color>
+    <color name="bgDark">#000000</color>
     <color name="bgLight">#dddddd</color>
     <!-- Workaround as I don't seem to be able to get ?attr/colorPrimary etc. in Java code for the status bar -->
     <!-- Otherwise, I would simply inline the colors in AppTheme resp. AppTheme.Light -->
-    <color name="colorPrimary">@color/material_blue_grey_800</color>
-    <color name="colorPrimaryDark">@color/material_blue_grey_900</color>
+    <color name="colorPrimary">#000</color>
+    <color name="colorPrimaryDark">#000</color>
     <color name="colorPrimary_light">#9C27B0</color>
     <color name="colorPrimaryDark_light">#6A1B9A</color>
     <color name="colorPrimary_teal">#009688</color>

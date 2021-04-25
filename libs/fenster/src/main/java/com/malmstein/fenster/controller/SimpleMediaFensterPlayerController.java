@@ -21,16 +21,15 @@ import com.malmstein.fenster.R;
 import com.malmstein.fenster.play.FensterPlayer;
 import com.malmstein.fenster.play.FensterVideoStateListener;
 import com.malmstein.fenster.view.FensterTouchRoot;
+import com.malmstein.fenster.view.FensterVideoView;
 
 import java.util.Formatter;
 import java.util.Locale;
 
 /**
  * Controller to manage syncing the ui models with the UI Controls and MediaPlayer.
- * <p/>
  * Note that the ui models have a narrow scope (i.e. chapter list, piece navigation),
  * their interaction is orchestrated by this controller.ø
- * <p/>
  * It's actually a view currently, as is the android MediaController.
  * (which is a bit odd and should be subject to change.)
  */
@@ -65,6 +64,7 @@ public final class SimpleMediaFensterPlayerController extends FrameLayout implem
     private ProgressBar loadingView;
     private int lastPlayedSeconds = -1;
 
+
     public SimpleMediaFensterPlayerController(final Context context) {
         this(context, null);
     }
@@ -79,7 +79,7 @@ public final class SimpleMediaFensterPlayerController extends FrameLayout implem
 
     @Override
     protected void onFinishInflate() {
-        LayoutInflater.from(getContext()).inflate(R.layout.view_simple_media_controller, this);
+        LayoutInflater.from(getContext()).inflate(R.layout.fen__view_simple_media_controller, this);
         initControllerView();
     }
 
@@ -95,33 +95,33 @@ public final class SimpleMediaFensterPlayerController extends FrameLayout implem
     }
 
     private void initControllerView() {
-        mPauseButton = (ImageButton) findViewById(R.id.media_controller_pause);
+        mPauseButton = (ImageButton) findViewById(R.id.fen__media_controller_pause);
         mPauseButton.requestFocus();
         mPauseButton.setOnClickListener(mPauseListener);
 
-        mNextButton = (ImageButton) findViewById(R.id.media_controller_next);
-        mPrevButton = (ImageButton) findViewById(R.id.media_controller_previous);
+        mNextButton = (ImageButton) findViewById(R.id.fen__media_controller_next);
+        mPrevButton = (ImageButton) findViewById(R.id.fen__media_controller_previous);
 
-        mProgress = (SeekBar) findViewById(R.id.media_controller_progress);
+        mProgress = (SeekBar) findViewById(R.id.fen__media_controller_progress);
         SeekBar seeker = (SeekBar) mProgress;
         seeker.setOnSeekBarChangeListener(mSeekListener);
         mProgress.setMax(1000);
 
-        mEndTime = (TextView) findViewById(R.id.media_controller_time);
-        mCurrentTime = (TextView) findViewById(R.id.media_controller_time_current);
+        mEndTime = (TextView) findViewById(R.id.fen__media_controller_time);
+        mCurrentTime = (TextView) findViewById(R.id.fen__media_controller_time_current);
         mFormatBuilder = new StringBuilder();
         mFormatter = new Formatter(mFormatBuilder, Locale.getDefault());
 
         FensterTouchRoot touchRoot = (FensterTouchRoot) findViewById(R.id.media_controller_touch_root);
         touchRoot.setOnTouchReceiver(this);
 
-        bottomControlsRoot = findViewById(R.id.media_controller_bottom_area);
+        bottomControlsRoot = findViewById(R.id.fen__media_controller_bottom_area);
         bottomControlsRoot.setVisibility(View.INVISIBLE);
 
         controlsRoot = findViewById(R.id.media_controller_controls_root);
         controlsRoot.setVisibility(View.INVISIBLE);
 
-        loadingView = (ProgressBar) findViewById(R.id.media_controller_loading_view);
+        loadingView = (ProgressBar) findViewById(R.id.fen__media_controller_loading_view);
     }
 
 

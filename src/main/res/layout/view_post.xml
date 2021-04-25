@@ -197,11 +197,6 @@
             </LinearLayout>
         </LinearLayout>
 
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:background="?attr/postview_divider"/>
-
         <LinearLayout
             android:id="@+id/actionContainer"
             android:layout_width="match_parent"
@@ -215,45 +210,21 @@
             >
 
             <TextView
-                android:id="@+id/reply"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:padding="4dp"
-                android:text="REPLY"
-                android:textColor="?attr/postview_action"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                />
-
-            <TextView
-                android:id="@+id/more"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:padding="4dp"
-                android:layout_marginLeft="14dp"
-                android:text="MORE"
-                android:textSize="16sp"
-                />
-
-            <View
-                android:layout_width="0dp"
-                android:layout_height="0dp"
-                android:layout_weight="1"
-                />
-
-            <TextView
                 android:id="@+id/replies"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:padding="4dp"
                 android:textSize="16sp"
-                tools:text="5 REPLIES"
-                />
+                tools:text="5 REPLIES" />
 
         </LinearLayout>
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
     </LinearLayout>
 
 </anabolicandroids.chanobol.ui.posts.PostView>
